@@ -210,13 +210,13 @@ resource "aws_security_group" "sg" {
 
 # ------------------------------------------------------------
 # 7. KEY PAIR SSH
-# Lit ta clé publique depuis ton Mac (~/.ssh/id_rsa.pub)
+# Lit ta clé publique depuis ton Mac (~/.ssh/id_ed25519.pub)
 # Injectée dans la VM automatiquement
-# Connexion : ssh -i ~/.ssh/id_rsa ubuntu@<IP>
+# Connexion : ssh -i ~/.ssh/id_ed25519 ec2-user@<IP>
 # ------------------------------------------------------------
 resource "aws_key_pair" "deployer" {
   key_name   = "key-ecommerce-${var.environment}"
-  public_key = file("~/.ssh/id_rsa.pub")
+  public_key = file("~/.ssh/id_ed25519.pub")
 
   tags = {
     Environment = var.environment

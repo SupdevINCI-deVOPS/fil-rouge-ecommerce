@@ -30,7 +30,7 @@ output "instance_id" {
 # Après terraform apply, copie-colle directement cette commande
 output "ssh_command" {
   description = "Commande SSH pour se connecter à la VM"
-  value       = "ssh -i ~/.ssh/id_rsa ubuntu@${aws_instance.vm.public_ip}"
+  value       = "ssh -i ~/.ssh/id_ed25519 ec2-user@${aws_instance.vm.public_ip}"
 }
 
 # URL de l'app ecommerce
