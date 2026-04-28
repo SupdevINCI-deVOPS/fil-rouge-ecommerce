@@ -1,7 +1,7 @@
 var mongoose = require("mongoose");
 var { shopSchema } = require("../../models/shop");
 
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
+mongoose.connect(process.env.MONGODB_URI || "mongodb://admin:password@mongo:27017/ecommerce");
 const Shop = mongoose.model("Shop", shopSchema);
 
 // Shop Management ===================================================

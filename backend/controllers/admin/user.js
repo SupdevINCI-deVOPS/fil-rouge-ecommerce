@@ -1,7 +1,7 @@
 var mongoose = require("mongoose");
 var { userSchema, roleSchema } = require("../../models/user");
 
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
+mongoose.connect(process.env.MONGODB_URI || "mongodb://admin:password@mongo:27017/ecommerce");
 
 const Role = mongoose.model("Role", roleSchema);
 const User = mongoose.model("User", userSchema);
