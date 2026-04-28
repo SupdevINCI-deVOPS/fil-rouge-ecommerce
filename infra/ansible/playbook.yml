@@ -1,0 +1,185 @@
+# ============================================================
+# playbook.yml — Configure la VM et déploie l'app e-commerce
+#
+# Ce playbook fait dans l'ordre :
+#   1. Met à jour Ubuntu
+#   2. Installe Docker + Docker Compose
+#   3. Crée les dossiers de l'app
+#   4. Copie les fichiers .env
+#   5. Clone le repo GitHub
+#   6. Lance docker-compose up
+#
+# Usage :
+#   preprod : ansible-playbook -i inventory.ini playbook.yml -l preprod
+#   prod    : ansible-playbook -i inventory.ini playbook.yml -l prod
+# ============================================================
+
+---
+- name: Déploiement app ecommerce microservices
+  hosts: "{{ target | default('preprod') }}"
+  become: true   # exécute les commandes en sudo
+
+  vars:
+    app_dir: /opt/ecommerce
+    github_repo: "https://github.com/arosfa/fil-rouge-ecommerce.git"
+    github_branch: "develop"  # pour preprod
+
+  tasks:
+
+    # ----------------------------------------------------------
+    # ÉTAPE 1 — Mise à jour du système
+    # Toujours mettre à jour avant d'installer quoi que ce soit
+    # ----------------------------------------------------------
+    - name: Mise à jour des paquets Ubuntu
+      apt:
+        update_cache: yes
+        upgrade: yes
+        cache_valid_time: 3600   # ne re-télécharge pas si < 1h
+
+    # ----------------------------------------------------------
+    # ÉTAPE 2 — Installation des dépendances Docker
+    # ----------------------------------------------------------
+    - name: Installation des dépendances Docker
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - git
+        state: present
+
+    # ----------------------------------------------------------
+    # ÉTAPE 3 — Ajout de la clé GPG Docker officielle
+    # Vérifie que les paquets Docker sont authentiques
+    # ----------------------------------------------------------
+    - name: Ajout clé GPG Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    # ----------------------------------------------------------
+    # ÉTAPE 4 — Ajout du repo Docker officiel
+    # ----------------------------------------------------------
+    - name: Ajout du repository Docker
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    # ----------------------------------------------------------
+    # ÉTAPE 5 — Installation Docker
+    # ----------------------------------------------------------
+    - name: Installation Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    # ----------------------------------------------------------
+    # ÉTAPE 6 — Installation Docker Compose v2
+    # ----------------------------------------------------------
+    - name: Installation Docker Compose
+      get_url:
+        url: https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    # ----------------------------------------------------------
+    # ÉTAPE 7 — Démarrage Docker au boot
+    # ----------------------------------------------------------
+    - name: Démarrage et activation Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    # ----------------------------------------------------------
+    # ÉTAPE 8 — Ajout ubuntu au groupe docker
+    # Pour lancer docker sans sudo
+    # ----------------------------------------------------------
+    - name: Ajout utilisateur ubuntu au groupe docker
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    # ----------------------------------------------------------
+    # ÉTAPE 9 — Création du dossier de l'app
+    # ----------------------------------------------------------
+    - name: Création du dossier /opt/ecommerce
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    # ----------------------------------------------------------
+    # ÉTAPE 10 — Clone du repo GitHub
+    # Si le repo existe déjà, fait un git pull
+    # ----------------------------------------------------------
+    - name: Clone / mise à jour du repo GitHub
+      git:
+        repo: "{{ github_repo }}"
+        dest: "{{ app_dir }}"
+        version: "{{ github_branch }}"
+        force: yes
+      become_user: ubuntu
+
+    # ----------------------------------------------------------
+    # ÉTAPE 11 — Copie des fichiers .env
+    # Les .env sont dans ansible/env/ sur ton Mac
+    # Ils sont copiés dans les bons dossiers sur la VM
+    # ----------------------------------------------------------
+    - name: Copie .env api-gateway
+      copy:
+        src: env/api-gateway.env
+        dest: "{{ app_dir }}/api-gateway/.env"
+        owner: ubuntu
+        mode: '0600'   # lecture uniquement par ubuntu — sécurité
+
+    - name: Copie .env auth
+      copy:
+        src: env/auth.env
+        dest: "{{ app_dir }}/auth/.env"
+        owner: ubuntu
+        mode: '0600'
+
+    - name: Copie .env product
+      copy:
+        src: env/product.env
+        dest: "{{ app_dir }}/product/.env"
+        owner: ubuntu
+        mode: '0600'
+
+    - name: Copie .env order
+      copy:
+        src: env/order.env
+        dest: "{{ app_dir }}/order/.env"
+        owner: ubuntu
+        mode: '0600'
+
+    # ----------------------------------------------------------
+    # ÉTAPE 12 — Lancement de l'app avec Docker Compose
+    # ----------------------------------------------------------
+    - name: Lancement docker-compose
+      command:
+        cmd: docker-compose up -d --build
+        chdir: "{{ app_dir }}"
+      become_user: ubuntu
+
+    # ----------------------------------------------------------
+    # ÉTAPE 13 — Vérification que les containers tournent
+    # ----------------------------------------------------------
+    - name: Vérification containers actifs
+      command: docker ps
+      register: docker_ps_output
+      become_user: ubuntu
+
+    - name: Affichage containers actifs
+      debug:
+        msg: "{{ docker_ps_output.stdout_lines }}"
