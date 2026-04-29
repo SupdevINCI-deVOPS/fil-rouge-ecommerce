@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+
+  # --------------------------------------------------------
+  # Prometheus — Collecte de métriques
+  # Accessible sur http://localhost:9090
+  # --------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ecommerce-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - ecommerce
+
+  # --------------------------------------------------------
+  # Grafana — Visualisation (Dashboards)
+  # Accessible sur http://localhost:3001 (admin / admin)
+  # --------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ecommerce-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - ecommerce
+
+  # --------------------------------------------------------
+  # Loki — Agrégation de logs
+  # --------------------------------------------------------
+  loki:
+    image: grafana/loki:latest
+    container_name: ecommerce-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - ecommerce
+
+  # --------------------------------------------------------
+  # Promtail — Agent d'envoi de logs vers Loki
+  # --------------------------------------------------------
+  promtail:
+    image: grafana/promtail:latest
+    container_name: ecommerce-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - ecommerce
+
+  # --------------------------------------------------------
+  # Node Exporter — Métriques du système hôte
+  # --------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: ecommerce-node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc)($|/)"
+    networks:
+      - ecommerce
+
+  # --------------------------------------------------------
+  # MongoDB Exporter — Métriques de la base de données
+  # --------------------------------------------------------
+  mongodb-exporter:
+    image: bitnami/mongodb-exporter:latest
+    container_name: ecommerce-mongodb-exporter
+    restart: unless-stopped
+    environment:
+      - MONGODB_URI=mongodb://admin:password@mongo:27017/admin?authSource=admin
+    depends_on:
+      - mongo
+    networks:
+      - ecommerce
+
+  # --------------------------------------------------------
+  # cAdvisor — Métriques des conteneurs
+  # --------------------------------------------------------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: ecommerce-cadvisor
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - ecommerce
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  ecommerce:
+    external: true

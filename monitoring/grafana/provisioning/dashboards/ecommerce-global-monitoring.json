@@ -1,0 +1,110 @@
+{
+  "annotations": { "list": [] },
+  "description": "Vue d'ensemble complète et définitive du projet E-Commerce",
+  "editable": true,
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "rate(http_request_duration_seconds_count{job=\"backend\"}[1m])",
+          "legendFormat": "{{method}} {{route}} {{code}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Backend — Requêtes/sec",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"backend\"}[5m]))",
+          "legendFormat": "p95 latency",
+          "refId": "A"
+        }
+      ],
+      "title": "Backend — Latence p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "mongodb_connections",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Mongo — Connexions Actives",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "rate(mongodb_op_counters_total[1m])",
+          "legendFormat": "{{type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Mongo — Opérations/sec",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "refId": "A"
+        }
+      ],
+      "title": "RAM Utilisée (Hôte)",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 16, "x": 8, "y": 16 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "container_memory_usage_bytes",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "RAM par Conteneur (cAdvisor)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Loki",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 24 },
+      "id": 14,
+      "options": { "showLabels": true, "showTime": true, "sortOrder": "Descending" },
+      "targets": [
+        {
+          "expr": "{container=~\"fil-rouge-ecommerce-.*|ecommerce-.*\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "Logs du projet",
+      "type": "logs"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 30,
+  "style": "dark",
+  "title": "E-Commerce Global Monitoring",
+  "uid": "ecommerce-global-monitoring",
+  "version": 2
+}
