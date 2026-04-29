@@ -126,7 +126,7 @@
         cmd: docker-compose -f docker-compose.monitoring.yml up -d
         chdir: "{{ app_dir }}"
       become_user: ec2-user
-      when: ansible_facts['os_family'] is defined
+      when: inventory_hostname in groups['prod']
 
     # ----------------------------------------------------------
     # ÉTAPE 10 — Vérification que les containers tournent
