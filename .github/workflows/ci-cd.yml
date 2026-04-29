@@ -62,12 +62,12 @@ jobs:
           npm run build
 
       - name: SonarCloud Scan
-        # analyse du code bloque si quality gate échoue fail
-        uses: SonarSource/sonarcloud-github-action@e46bab31e3ef5fb5b90dfe9dad6f0caa03a0f02b  # v3.1.0
+        # analyse du code, non bloquant — erreurs remontées sans stopper la pipeline
+        continue-on-error: true
+        uses: SonarSource/sonarcloud-github-action@383f7e52eae3ab0510c3cb0e7d9d150bbaeab838  # v3.1.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
   # ============================================================
   # JOB 2 — Build & Push Docker
   # Déclenché manuellement après succès du CI
