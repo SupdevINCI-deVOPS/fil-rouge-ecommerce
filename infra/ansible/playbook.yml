@@ -16,7 +16,7 @@
 
 ---
 - name: Déploiement app ecommerce microservices
-  hosts: "{{ target | default('preprod') }}"
+  hosts: all
   become: true   # exécute les commandes en sudo
 
   vars:
@@ -73,6 +73,9 @@
         name: ec2-user
         groups: docker
         append: yes
+
+    - name: Reconnexion pour appliquer le groupe docker
+      meta: reset_connection
 
     # ----------------------------------------------------------
     # ÉTAPE 6 — Création du dossier de l'app
