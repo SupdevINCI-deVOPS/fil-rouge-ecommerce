@@ -99,6 +99,7 @@ services:
 networks:
   ecommerce:
     driver: bridge
+    name: ecommerce
 
 volumes:
   mongo_data:

@@ -115,16 +115,18 @@
     # ----------------------------------------------------------
     # ÉTAPE 9 — Lancement de l'app avec Docker Compose
     # ----------------------------------------------------------
-    - name: Lancement docker-compose
-      shell: |
-        if [ -f docker-compose.monitoring.yml ]; then
-          docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build
-        else
-          docker-compose up -d --build
-        fi
-      args:
+    - name: Lancement docker-compose principal
+      command:
+        cmd: docker-compose up -d --build
         chdir: "{{ app_dir }}"
       become_user: ec2-user
+
+    - name: Lancement docker-compose monitoring
+      command:
+        cmd: docker-compose -f docker-compose.monitoring.yml up -d
+        chdir: "{{ app_dir }}"
+      become_user: ec2-user
+      when: ansible_facts['os_family'] is defined
 
     # ----------------------------------------------------------
     # ÉTAPE 10 — Vérification que les containers tournent

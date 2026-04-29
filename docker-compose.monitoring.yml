@@ -99,8 +99,6 @@ services:
     restart: unless-stopped
     environment:
       - MONGODB_URI=mongodb://admin:password@mongo:27017/admin?authSource=admin
-    depends_on:
-      - mongo
     networks:
       - ecommerce
 
@@ -127,3 +125,4 @@ volumes:
 networks:
   ecommerce:
     external: true
+    name: ecommerce
