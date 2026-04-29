@@ -1,0 +1,116 @@
+# ci-cd.yml — Pipeline CI/CD GitHub Actions
+#
+# TRIGGERS :
+#   - Push sur develop → CI (build + tests + sonar)
+#   - Push sur main    → CD (deploy AWS via SSH)
+#   -Deploy sur la prprod puis la prod
+# SECRETS GITHUB REQUIS :
+#   - DOCKER_USERNAME  
+#   - DOCKER_PASSWORD  
+#   - SONAR_TOKEN      
+#   - SSH_PRIVATE_KEY  
+#   - PREPROD_IP        
+#   - PROD_IP          
+# ============================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+
+  # 
+  # JOB 1 — CI
+  # Push sur develop → build + tests + sonar
+  ci:
+    name: CI — Build & Test & Sonar
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install & test backend
+        run: |
+          cd backend
+          npm install
+          npm test --if-present
+
+      - name: Install & build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # JOB 2 — CD
+  # Push sur main → push Docker Hub + deploy SSH
+
+  cd:
+    name: CD — Deploy to AWS
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          push: true
+          tags: arosfa/ecommerce-backend:latest
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend
+          push: true
+          tags: arosfa/ecommerce-frontend:latest
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Deploy to preprod
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/id_ed25519 \
+              ec2-user@${{ secrets.PREPROD_IP }} \
+              "cd /opt/ecommerce && git pull origin main && docker-compose up -d --build"
+
+      - name: Deploy to prod
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/id_ed25519 \
+              ec2-user@${{ secrets.PROD_IP }} \
+              "cd /opt/ecommerce && git pull origin main && docker-compose up -d --build"
