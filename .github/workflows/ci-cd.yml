@@ -48,6 +48,9 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'  # mise en cache npm entre chaque run
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.jsong
 
       - name: Install & test backend
         working-directory: backend
