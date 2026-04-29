@@ -176,6 +176,15 @@ resource "aws_security_group" "sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Port 9100 — Node Exporter
+  ingress {
+    description = "Node Exporter"
+    from_port   = 9100
+    to_port     = 9100
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   # Tout le trafic sortant autorisé
   egress {
     from_port   = 0
