@@ -116,8 +116,13 @@
     # ÉTAPE 9 — Lancement de l'app avec Docker Compose
     # ----------------------------------------------------------
     - name: Lancement docker-compose
-      command:
-        cmd: docker-compose up -d --build
+      shell: |
+        if [ -f docker-compose.monitoring.yml ]; then
+          docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build
+        else
+          docker-compose up -d --build
+        fi
+      args:
         chdir: "{{ app_dir }}"
       become_user: ec2-user
 
