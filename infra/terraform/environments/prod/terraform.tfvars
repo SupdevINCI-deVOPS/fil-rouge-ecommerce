@@ -10,4 +10,4 @@ aws_region    = "eu-west-3"
 instance_type = "t3.small"
 disk_size     = 30
 ami_id        = "ami-08461dc8cd9e834e0"
-my_ip         = "86.247.145.147"
+my_ip         = "185.13.180.223"
