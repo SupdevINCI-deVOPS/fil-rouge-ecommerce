@@ -3,114 +3,179 @@
 # TRIGGERS :
 #   - Push sur develop → CI (build + tests + sonar)
 #   - Push sur main    → CD (deploy AWS via SSH)
-#   -Deploy sur la prprod puis la prod
+#   - Deploy sur la preprod puis la prod
+#
 # SECRETS GITHUB REQUIS :
-#   - DOCKER_USERNAME  
-#   - DOCKER_PASSWORD  
-#   - SONAR_TOKEN      
-#   - SSH_PRIVATE_KEY  
-#   - PREPROD_IP        
-#   - PROD_IP          
+#   - DOCKER_USERNAME
+#   - DOCKER_PASSWORD
+#   - SONAR_TOKEN
+#   - SSH_PRIVATE_KEY
+#   - PREPROD_IP
+#   - PROD_IP
 # ============================================================
 
 name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - develop
-      - main
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+env:
+  # noms des images Docker Hub
+  DOCKER_BACKEND_IMAGE: arosfa/ecommerce-backend
+  DOCKER_FRONTEND_IMAGE: arosfa/ecommerce-frontend
 
 jobs:
-
-  # 
+  # ============================================================
   # JOB 1 — CI
-  # Push sur develop → build + tests + sonar
+  # Déclenché sur develop et sur PRs
+  # ============================================================
   ci:
-    name: CI — Build & Test & Sonar
+    name: CI — Test & Sonar
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'  # mise en cache npm entre chaque run
 
       - name: Install & test backend
+        working-directory: backend
         run: |
-          cd backend
-          npm install
+          npm ci  # installation stricte basée sur le package-lock
           npm test --if-present
 
       - name: Install & build frontend
+        working-directory: frontend
         run: |
-          cd frontend
-          npm install
+          npm ci
           npm run build
 
-      - name: Build Docker images
-        run: docker compose build
-
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        # analyse du code bloque si quality gate échoue fail
+        uses: SonarSource/sonarcloud-github-action@e46bab31e3ef5fb5b90dfe9dad6f0caa03a0f02b  # v3.1.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  # JOB 2 — CD
-  # Push sur main → push Docker Hub + deploy SSH
-
-  cd:
-    name: CD — Deploy to AWS
+  # ============================================================
+  # JOB 2 — Build & Push Docker
+  # Déclenché manuellement après succès du CI
+  # ============================================================
+  build:
+    name: Build & Push Docker images
     runs-on: ubuntu-latest
+    needs: ci 
     if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435  # v3.11.1
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef  # v3.6.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Docker metadata — backend
+        id: meta-backend
+        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893  # v5.9.0
+        with:
+          images: ${{ env.DOCKER_BACKEND_IMAGE }}
+          tags: |
+            type=sha,prefix=   # tag avec le SHA du commit pour la traçabilité
+            type=raw,value=latest
+
+      - name: Docker metadata — frontend
+        id: meta-frontend
+        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893  # v5.9.0
+        with:
+          images: ${{ env.DOCKER_FRONTEND_IMAGE }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
       - name: Build & push backend
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671  # v5
         with:
           context: ./backend
           push: true
-          tags: arosfa/ecommerce-backend:latest
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          cache-from: type=gha  # cache des layers Docker entre les runs
+          cache-to: type=gha,mode=max
 
       - name: Build & push frontend
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671  # v5
         with:
           context: ./frontend
           push: true
-          tags: arosfa/ecommerce-frontend:latest
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Setup SSH
+  # ============================================================
+  # JOB 3 — Deploy Preprod
+  # Tire les images déjà buildées, pas de rebuild sur le serveur
+  # ============================================================
+  deploy-preprod:
+    name: Deploy — Preprod
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: preprod  # peut être protégé par des règles sur GitHub
+
+    steps:
+      - name: Add server to known_hosts
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          # plus sûr que StrictHostKeyChecking=no
+          ssh-keyscan -H ${{ secrets.PREPROD_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy to preprod
         run: |
-          ssh -o StrictHostKeyChecking=no \
-              -i ~/.ssh/id_ed25519 \
-              ec2-user@${{ secrets.PREPROD_IP }} \
-              "cd /opt/ecommerce && git pull origin main && docker-compose up -d --build"
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | ssh-add -
+          ssh ec2-user@${{ secrets.PREPROD_IP }} \
+            "cd /opt/ecommerce \
+            && docker pull ${{ env.DOCKER_BACKEND_IMAGE }}:latest \
+            && docker pull ${{ env.DOCKER_FRONTEND_IMAGE }}:latest \
+            && docker-compose up -d"
 
-      - name: Deploy to prod
+  # ============================================================
+  # JOB 4 — Deploy Prod
+  # Bloqué tant que la preprod n'est pas déployée avec succès
+  # ============================================================
+  deploy-prod:
+    name: Deploy — Production
+    runs-on: ubuntu-latest
+    needs: deploy-preprod
+    if: github.ref == 'refs/heads/main'
+    environment: production  # configurer une approbation manuelle sur GitHub si besoin
+
+    steps:
+      - name: Add server to known_hosts
         run: |
-          ssh -o StrictHostKeyChecking=no \
-              -i ~/.ssh/id_ed25519 \
-              ec2-user@${{ secrets.PROD_IP }} \
-              "cd /opt/ecommerce && git pull origin main && docker-compose up -d --build"
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.PROD_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to production
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | ssh-add -
+          ssh ec2-user@${{ secrets.PROD_IP }} \
+            "cd /opt/ecommerce \
+            && docker pull ${{ env.DOCKER_BACKEND_IMAGE }}:latest \
+            && docker pull ${{ env.DOCKER_FRONTEND_IMAGE }}:latest \
+            && docker-compose up -d"
