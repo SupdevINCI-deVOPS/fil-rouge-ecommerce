@@ -212,6 +212,12 @@ resource "aws_instance" "vm" {
   vpc_security_group_ids = [aws_security_group.sg.id]
   key_name               = aws_key_pair.deployer.key_name
 
+  user_data = <<-EOF
+    #!/bin/bash
+    systemctl stop firewalld
+    systemctl disable firewalld
+  EOF
+
   root_block_device {
     volume_size = var.disk_size
     volume_type = "gp2"
